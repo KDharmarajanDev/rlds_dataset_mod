@@ -1,0 +1,9 @@
+LICENSE
+README.md
+setup.py
+rlds_dataset_mod/mod_functions.py
+rlds_dataset_mod/multithreaded_adhoc_tfds_builder.py
+rlds_dataset_mod.egg-info/PKG-INFO
+rlds_dataset_mod.egg-info/SOURCES.txt
+rlds_dataset_mod.egg-info/dependency_links.txt
+rlds_dataset_mod.egg-info/top_level.txt

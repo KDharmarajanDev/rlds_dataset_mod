@@ -4,6 +4,7 @@ from multiprocessing import Pool
 from typing import Any, Callable, Dict, Iterable, Tuple, Union
 
 import numpy as np
+import os
 import tensorflow as tf
 import tensorflow_datasets as tfds
 from tensorflow_datasets.core import (
@@ -187,28 +188,47 @@ class ParallelSplitBuilder(split_builder_lib.SplitBuilder):
             self._max_episodes_in_memory,
         )  # generate N episode lists
         print(f"Generating with {self._n_workers} workers!")
-        pool = Pool(processes=self._n_workers)
+        if self._n_workers > 1:
+            pool = Pool(processes=self._n_workers)
         for i, episodes in enumerate(episode_lists):
             print(f"Processing chunk {i + 1} of {len(episode_lists)}.")
-            results = pool.map(
-                partial(
-                    parse_examples_from_generator,
-                    fcn=self._generator_fcn,
-                    split_name=split_name,
-                    total_num_examples=total_num_examples,
-                    serializer=writer._serializer,
-                    features=self._features,
-                    max_episodes=self._split_dict[split_name].num_examples,
-                ),
-                episodes,
-            )
-            # write results to shuffler --> this will automatically offload to disk if necessary
-            print("Writing conversion results...")
-            for result in itertools.chain(*results):
-                key, serialized_example = result
-                writer._shuffler.add(key, serialized_example)
-                writer._num_examples += 1
-        pool.close()
+            if self._n_workers > 1:
+                results = pool.map(
+                    partial(
+                        parse_examples_from_generator,
+                        fcn=self._generator_fcn,
+                        split_name=split_name,
+                        total_num_examples=total_num_examples,
+                        serializer=writer._serializer,
+                        features=self._features,
+                        max_episodes=self._split_dict[split_name].num_examples,
+                    ),
+                    episodes,
+                )
+                # write results to shuffler --> this will automatically offload to disk if necessary
+                print("Writing conversion results...")
+                for result in itertools.chain(*results):
+                    key, serialized_example = result
+                    writer._shuffler.add(key, serialized_example)
+                    writer._num_examples += 1
+            else:
+            # Kill off multiprocessing for now
+                for episode in episodes:
+                    results = parse_examples_from_generator(
+                        episode,
+                        fcn=self._generator_fcn,
+                        split_name=split_name,
+                        total_num_examples=total_num_examples,
+                        serializer=writer._serializer,
+                        features=self._features,
+                        max_episodes=self._split_dict[split_name].num_examples,
+                    )
+                    for result in results:
+                        key, serialized_example = result
+                        writer._shuffler.add(key, serialized_example)
+                        writer._num_examples += 1
+        if self._n_workers > 1:
+            pool.close()
 
         print("Finishing split conversion...")
         shard_lengths, total_size = writer.finalize()
